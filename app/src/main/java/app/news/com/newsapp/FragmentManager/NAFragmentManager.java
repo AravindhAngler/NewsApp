@@ -71,7 +71,13 @@ public class NAFragmentManager {
         }
     }
 
+    public int getBackstackCount() {
 
+        FragmentManager aFragmentManager = myContext
+                .getSupportFragmentManager();
+
+        return aFragmentManager.getBackStackEntryCount();
+    }
 
     public void backPress() {
 

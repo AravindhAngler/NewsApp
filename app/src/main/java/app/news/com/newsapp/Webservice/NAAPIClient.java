@@ -3,9 +3,6 @@ package app.news.com.newsapp.Webservice;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-/**
- * Created by selvakumark on 28-10-2017.
- */
 
 public class NAAPIClient {
 
@@ -14,7 +11,7 @@ public class NAAPIClient {
 
 
     public static Retrofit getClient() {
-        if (retrofit==null) {
+        if (retrofit == null) {
             retrofit = new Retrofit.Builder()
                     .baseUrl(BASE_URL)
                     .addConverterFactory(GsonConverterFactory.create())
@@ -22,4 +19,6 @@ public class NAAPIClient {
         }
         return retrofit;
     }
+
+
 }

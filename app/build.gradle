@@ -29,5 +29,10 @@ dependencies {
     compile 'com.twotoasters.jazzylistview:library:1.2.1'
     compile 'com.squareup.retrofit2:retrofit:2.0.2'
     compile 'com.squareup.retrofit2:converter-gson:2.0.2'
-    testCompile 'junit:junit:4.12'
+
+
+    //Dependencies for JUNit and unit tests.
+    testCompile "junit:junit:4.12"
+    testCompile 'org.mockito:mockito-core:2.0.90-beta'
+
 }

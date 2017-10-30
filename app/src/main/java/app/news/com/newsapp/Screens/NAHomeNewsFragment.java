@@ -5,13 +5,11 @@ import android.content.Context;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
-import android.support.v4.widget.SwipeRefreshLayout;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
-import android.widget.AbsListView.OnScrollListener;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -24,19 +22,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 import app.news.com.newsapp.Adapter.NPNewsListAdapter;
+import app.news.com.newsapp.Contants.NAConstant;
+import app.news.com.newsapp.FragmentManager.NAFragmentManager;
 import app.news.com.newsapp.Helper.NAHelper;
 import app.news.com.newsapp.Helper.NAHideSoftKeyboard;
 import app.news.com.newsapp.Pojo.Hit;
 import app.news.com.newsapp.Pojo.News;
+import app.news.com.newsapp.Presenter.NAHomeNewsPresenter;
+import app.news.com.newsapp.Presenter.NAHomeNewsPresenterImpl;
+import app.news.com.newsapp.Presenter.NAMainPresenter;
 import app.news.com.newsapp.R;
 import app.news.com.newsapp.Webservice.NAAPIClient;
 import app.news.com.newsapp.Webservice.NAAPIInterface;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 @SuppressLint("NewApi")
-public class NAHomeNewsFragment extends Fragment {
+public class NAHomeNewsFragment extends Fragment implements NAHomeNewsPresenter, NAConstant {
     // TAG
     public static final String TAG = NAHomeNewsFragment.class.getSimpleName().toString();
 
@@ -44,17 +44,14 @@ public class NAHomeNewsFragment extends Fragment {
     private NPNewsListAdapter myAdapter;
     private LayoutInflater myInflater;
     private EditText mySearchEDT;
-    private int MyTotalPage = 1;
     private RelativeLayout myInitialLoadingBarLay, myFooterLoadingLay;
     private TextView myNoDataFoundLay, myDoneTXT;
     private boolean isDataLoadedAlready = false;
-    private SwipeRefreshLayout mySwipeRefreshLayout;
     private FragmentActivity myContext;
     private List<Hit> myNewsAL = new ArrayList<>();
-    private NAAPIInterface myWebService;
-    private int CURRENT_PAGE_COUNT = -1;
-
     private View myView;
+    private NAMainPresenter myNAMainPresenter;
+    private NAFragmentManager myFragmentManager;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -77,6 +74,9 @@ public class NAHomeNewsFragment extends Fragment {
         try {
             myContext = getActivity();
 
+            myNAMainPresenter = new NAHomeNewsPresenterImpl(this, NAAPIClient.getClient().create(NAAPIInterface.class));
+
+            myFragmentManager = new NAFragmentManager(myContext);
 
             myInflater = (LayoutInflater) getActivity().getSystemService(
                     Context.LAYOUT_INFLATER_SERVICE);
@@ -87,9 +87,6 @@ public class NAHomeNewsFragment extends Fragment {
             myNewsLV.setShouldOnlyAnimateNewItems(true);
 
             myNewsLV.setTransitionEffect(new GrowEffect());
-
-            myWebService =
-                    NAAPIClient.getClient().create(NAAPIInterface.class);
 
             myInitialLoadingBarLay = (RelativeLayout) aView
                     .findViewById(R.id.screen_allreview_LAY_loading);
@@ -102,24 +99,13 @@ public class NAHomeNewsFragment extends Fragment {
             myDoneTXT = (TextView) aView
                     .findViewById(R.id.screen_fragment_home_search_IMG);
 
-            myNoDataFoundLay.setText(getResources().getString(R.string.no_news_found));
-
             myFooterLoadingLay = (RelativeLayout) myInflater.inflate(
                     R.layout.layout_inflate_loading_details, null);
-
-            mySwipeRefreshLayout = (SwipeRefreshLayout) aView
-                    .findViewById(R.id.screen_fragment_home_news_SWRL);
 
             myAdapter = new NPNewsListAdapter(getActivity(),
                     myNewsAL);
 
             myNewsLV.setAdapter(myAdapter);
-
-            myInitialLoadingBarLay.setVisibility(View.GONE);
-
-            myFooterLoadingLay.setVisibility(View.GONE);
-
-            configureListView();
 
             clickListeners();
 
@@ -129,269 +115,131 @@ public class NAHomeNewsFragment extends Fragment {
 
     }
 
+
+    @Override
+    public void showInitialProgress() {
+        myNoDataFoundLay.setVisibility(View.GONE);
+        myInitialLoadingBarLay.setVisibility(View.VISIBLE);
+    }
+
+    @Override
+    public void showFooterProgress() {
+        myFooterLoadingLay.setVisibility(View.VISIBLE);
+
+    }
+
+    @Override
+    public void loadWebview(String aUrl) {
+        if (checkInternet()) {
+            callWebView(aUrl);
+        } else {
+            showToastMessage(NO_INTERNET);
+        }
+    }
+
+    @Override
+    public void hideInitialProgress() {
+        myInitialLoadingBarLay.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void hideFooterProgress() {
+        myFooterLoadingLay.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void setItems(News aNews) {
+        List<Hit> aHits = aNews.getHits();
+        loadListContent(aHits);
+    }
+
+    @Override
+    public void showMessage(String message) {
+        myAdapter.clear();
+        myNewsAL = new ArrayList<>();
+        myNoDataFoundLay.setVisibility(View.VISIBLE);
+        myNoDataFoundLay.setText(message);
+    }
+
+
+    @Override
+    public void showToastMessage(String message) {
+        Toast.makeText(myContext, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onDestroy() {
+        myNAMainPresenter.onDestroy();
+        super.onDestroy();
+    }
+
     private void clickListeners() {
 
         myDoneTXT.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (checkInternet()) {
-                    setSearchText(mySearchEDT.getText().toString().trim());
-                    reloadAll();
+                    myAdapter.clear();
+                    myNewsAL = new ArrayList<>();
+                    myNAMainPresenter.searchItems(mySearchEDT.getText().toString().trim(), 0);
+
                 } else {
-                    Toast.makeText(myContext, "No Internet Connection", Toast.LENGTH_LONG).show();
+                    showMessage(NO_INTERNET);
+                }
+            }
+        });
+        myNewsLV.addFooterView(myFooterLoadingLay);
+
+        myNewsLV.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(AbsListView arg0, int arg1) {
+            }
+
+            @Override
+            public void onScroll(AbsListView view, int firstVisibleItem,
+                                 int visibleItemCount, int totalItemCount) {
+                if (checkInternet()) {
+                    if (myNewsAL.size() != 0) {
+                        myNAMainPresenter.onScroll(firstVisibleItem, visibleItemCount, totalItemCount, mySearchEDT.getText().toString().trim());
+                    }
+                } else {
+                    hideFooterProgress();
+                    hideInitialProgress();
+                    showToastMessage(NO_INTERNET);
                 }
             }
         });
 
-    }
-
-    /**
-     * configure list view
-     */
-    private void configureListView() {
-
-        try {
-            myNewsLV.addFooterView(myFooterLoadingLay);
-
-            myNewsLV.setOnScrollListener(new OnScrollListener() {
-
-                @Override
-                public void onScrollStateChanged(AbsListView arg0, int arg1) {
-
+        myNewsLV.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                if (checkInternet()) {
+                    Hit aHit = (Hit) parent.getItemAtPosition(position);
+                    myNAMainPresenter.itemClick(aHit.getUrl());
+                } else {
+                    showToastMessage(NO_INTERNET);
                 }
-
-                @Override
-                public void onScroll(AbsListView view, int firstVisibleItem,
-                                     int visibleItemCount, int totalItemCount) {
-                    try {
-                        if (myNewsAL != null)
-                            if (myNewsAL.size() == 0)
-                                return;
-
-                        int lastInScreen = firstVisibleItem + visibleItemCount;
-                        if (lastInScreen == totalItemCount) {
-
-                            Log.e("Scroll last arrived", "Scroll last arrived "
-                                    + getTotalPage());
-
-                            if (checkInternet()) {
-
-                                if ((getTotalPage() != 0)
-                                        && (getTotalPage() > getCurrentPageCount())) {
-
-                                    setFooterLoadingList(true);
-                                    loadDetailsInfoFromServer();
-
-                                } else {
-                                    setFooterLoadingList(false);
-                                    setInitialLoadingBarStatus(false);
-                                }
-
-
-                            } else {
-
-
-                                setFooterLoadingList(false);
-                                setInitialLoadingBarStatus(false);
-
-                            }
-
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-
-                }
-
-            });
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    public void updatedData(List<Hit> aArrayList) {
-
-        myAdapter.clear();
-
-        if (aArrayList != null) {
-
-            for (Hit aHit : aArrayList) {
-
-                myAdapter.insert(aHit, myAdapter.getCount());
             }
-        }
-
-        myAdapter.notifyDataSetChanged();
-
+        });
     }
 
-    /**
-     * Set footer loading status
-     *
-     * @param aStatus
-     */
-    private void setFooterLoadingList(boolean aStatus) {
-
-        try {
-            if (aStatus)
-                // Show footer
-                myFooterLoadingLay.setVisibility(View.VISIBLE);
-            else
-                // Hide the footer
-                myFooterLoadingLay.setVisibility(View.GONE);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    /**
-     * Load details information
-     */
-    private void loadDetailsInfoFromServer() {
-
-        if (checkInternet()) {
-            increaePageCount();
-            loadNewsDetails(getSearchText());
-        } else {
-
-        }
-    }
-
-    /**
-     * check internet
-     *
-     * @return
-     */
-    private boolean checkInternet() {
-        return NAHelper.checkInternet(getActivity());
-    }
-
-    /**
-     * Set initial loading bar status
-     *
-     * @param aStatus
-     */
-    private void setInitialLoadingBarStatus(boolean aStatus) {
-
-        try {
-
-            if (aStatus)
-                myInitialLoadingBarLay.setVisibility(View.VISIBLE);
-            else
-                myInitialLoadingBarLay.setVisibility(View.GONE);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Increase page number
-     */
-    private void increaePageCount() {
-
-        setCurrentPageNo(getCurrentPageCount() + 1);
-
-    }
-
-    /**
-     * Get total page
-     *
-     * @return total page
-     */
-    private int getTotalPage() {
-        return MyTotalPage;
-    }
-
-    /**
-     * Set total page
-     *
-     * @param aTotalPage
-     */
-    private void setTotalPage(int aTotalPage) {
-        MyTotalPage = aTotalPage;
-    }
-
-
-    /**
-     * Reload webservice
-     */
-    private void reloadAll() {
-
-        // Clear cache
-        myNewsAL.clear();
-
-        updatedData(myNewsAL);
-
-        // Show initial loading bar
-        setInitialLoadingBarStatus(true);
-
-        // Show footer loading
-        setFooterLoadingList(false);
-
-        // Hide initial loading bar
-        setNoDataFoundStatus(false);
-
-        // Reset page number
-        setCurrentPageNo(-1);
-
-        loadDetailsInfoFromServer();
-
-    }
-
-    private void setRefreshing(boolean aStatus) {
-        if (aStatus) {
-            mySwipeRefreshLayout.setRefreshing(true);
-        } else {
-            mySwipeRefreshLayout.setRefreshing(false);
-        }
-    }
 
     /**
      * loadListContent
      *
      * @param aAllReviewInfoList
      */
+
     private void loadListContent(List<Hit> aAllReviewInfoList) {
 
-        // Hide initial loading bar
-        setInitialLoadingBarStatus(false);
-
-        if (aAllReviewInfoList.size() > 0) {
-
-            if (!isDataLoadedAlready()) {
-                myNewsAL = aAllReviewInfoList;
-                updatedData(myNewsAL);
-                setDataLoadedAlready(true);
-                NAHelper.setColorScheme(mySwipeRefreshLayout);
-                mySwipeRefreshLayout
-                        .setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-                            @Override
-                            public void onRefresh() {
-                                reloadAll();
-                            }
-                        });
-            } else {
-                for (int aCount = 0; aCount < aAllReviewInfoList.size(); aCount++)
-                    addDetailsList(aAllReviewInfoList.get(aCount));
-                updatedData(myNewsAL);
-                mySwipeRefreshLayout
-                        .setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-                            @Override
-                            public void onRefresh() {
-                                reloadAll();
-                            }
-                        });
-            }
-
+        if (!isDataLoadedAlready()) {
+            myNewsAL = aAllReviewInfoList;
+            myAdapter.updatedData(myNewsAL);
+            setDataLoadedAlready(true);
         } else {
-            if (getCurrentPageCount() == 0)
-                setNoDataFoundStatus(true);
-            myFooterLoadingLay.setVisibility(View.GONE);
+            for (int aCount = 0; aCount < aAllReviewInfoList.size(); aCount++)
+                addDetailsList(aAllReviewInfoList.get(aCount));
+            myAdapter.updatedData(myNewsAL);
         }
 
     }
@@ -420,59 +268,37 @@ public class NAHomeNewsFragment extends Fragment {
     }
 
     /**
-     * Set no data found layout status
+     * check internet
      *
-     * @param aStatus
+     * @return
      */
-    private void setNoDataFoundStatus(boolean aStatus) {
+    private boolean checkInternet() {
+        return NAHelper.checkInternet(getActivity());
+    }
 
-        if (aStatus)
-            myNoDataFoundLay.setVisibility(View.VISIBLE);
-        else
-            myNoDataFoundLay.setVisibility(View.GONE);
+    /**
+     * Method to call webview
+     *
+     * @param aUrlStr
+     */
+    private void callWebView(String aUrlStr) {
+        try {
+            if (!aUrlStr.equals(""))
+
+                try {
+                    Bundle aBundle = new Bundle();
+                    aBundle.putString(CALL_URL, aUrlStr);
+                    myFragmentManager.updateContent(
+                            new NAScreenWebView(),
+                            NAScreenWebView.TAG, aBundle);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 
-
-    public int getCurrentPageCount() {
-        return CURRENT_PAGE_COUNT;
-    }
-
-    public void setCurrentPageNo(int cURRENT_PAGE_COUNT) {
-        CURRENT_PAGE_COUNT = cURRENT_PAGE_COUNT;
-    }
-
-
-    public void loadNewsDetails(String aSearchText) {
-
-
-        Call<News> call = myWebService.getNews(aSearchText, CURRENT_PAGE_COUNT);
-        call.enqueue(new Callback<News>() {
-            @Override
-            public void onResponse(Call<News> call, Response<News> response) {
-                List<Hit> aHits = response.body().getHits();
-                setRefreshing(false);
-                setTotalPage(response.body().getNbPages());
-                loadListContent(aHits);
-
-
-            }
-
-            @Override
-            public void onFailure(Call<News> call, Throwable t) {
-                // Log error here since request failed
-                Log.e(TAG, t.toString());
-            }
-        });
-    }
-
-    public String getSearchText() {
-        return SearchText;
-    }
-
-    public void setSearchText(String searchText) {
-        SearchText = searchText;
-    }
-
-    String SearchText = "";
 }

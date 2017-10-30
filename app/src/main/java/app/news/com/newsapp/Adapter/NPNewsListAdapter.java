@@ -1,14 +1,12 @@
 package app.news.com.newsapp.Adapter;
 
 import android.content.Context;
-import android.os.Bundle;
 import android.support.v4.app.FragmentActivity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.List;
 
@@ -17,7 +15,6 @@ import app.news.com.newsapp.FragmentManager.NAFragmentManager;
 import app.news.com.newsapp.Helper.NAHelper;
 import app.news.com.newsapp.Pojo.Hit;
 import app.news.com.newsapp.R;
-import app.news.com.newsapp.Screens.NAScreenWebView;
 
 
 public class NPNewsListAdapter extends ArrayAdapter<Hit> implements NAConstant {
@@ -25,12 +22,10 @@ public class NPNewsListAdapter extends ArrayAdapter<Hit> implements NAConstant {
     private Context myContext;
     private List<Hit> myNewsList;
     private LayoutInflater myInflater;
-    private NAFragmentManager myFragmentManager;
 
     public NPNewsListAdapter(FragmentActivity aContext, List<Hit> aArrayList) {
         super(aContext, 0, aArrayList);
         this.myNewsList = aArrayList;
-        myFragmentManager = new NAFragmentManager(aContext);
         this.myContext = aContext;
     }
 
@@ -86,19 +81,9 @@ public class NPNewsListAdapter extends ArrayAdapter<Hit> implements NAConstant {
 
         loadValues(aHolder, aPosition);
 
-        clickListener(aView, aPosition);
-
         return aView;
     }
 
-    private void clickListener(View aView, final int aPosition) {
-        aView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                callWebView(getItem(aPosition).getUrl());
-            }
-        });
-    }
 
     private void loadValues(ViewHolder aHolder, int aPosition) {
         try {
@@ -118,6 +103,16 @@ public class NPNewsListAdapter extends ArrayAdapter<Hit> implements NAConstant {
 
     }
 
+    public void updatedData(List<Hit> aArrayList) {
+        clear();
+        if (aArrayList != null) {
+            for (Hit aHit : aArrayList) {
+                insert(aHit, getCount());
+            }
+        }
+        notifyDataSetChanged();
+    }
+
     /**
      * View Holder
      */
@@ -126,41 +121,5 @@ public class NPNewsListAdapter extends ArrayAdapter<Hit> implements NAConstant {
 
     }
 
-    /**
-     * Method to call webview
-     *
-     * @param aUrlStr
-     */
-    private void callWebView(String aUrlStr) {
-        try {
-            if (!aUrlStr.equals(""))
-                if (checkInternet()) {
-                    try {
-                        Bundle aBundle = new Bundle();
-                        aBundle.putString(CALL_URL, aUrlStr);
-                        myFragmentManager.updateContent(
-                                new NAScreenWebView(),
-                                NAScreenWebView.TAG, aBundle);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                } else {
-                    Toast.makeText(myContext, "No Internet Connection", Toast.LENGTH_LONG).show();
-                }
-            // RTCHelper.callWebView(myContext, aUrlStr);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    /**
-     * check internet
-     *
-     * @return
-     */
-    private boolean checkInternet() {
-        return NAHelper.checkInternet(myContext);
-    }
 }
 

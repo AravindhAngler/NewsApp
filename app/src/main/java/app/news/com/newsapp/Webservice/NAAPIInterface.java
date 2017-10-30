@@ -12,7 +12,5 @@ import retrofit2.http.Query;
 
 public interface NAAPIInterface {
     @GET("search?")
-    Call<News> getNews(@Query("query") String apiKey,@Query("page") int aPage);
-
-
+    Call<News> getNews(@Query("query") String apiKey, @Query("page") int aPage);
 }
