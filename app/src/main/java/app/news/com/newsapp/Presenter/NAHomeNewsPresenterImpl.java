@@ -45,14 +45,12 @@ public class NAHomeNewsPresenterImpl implements NAMainPresenter, Callback<News>,
 
     @Override
     public void searchItems(String aSearchText, int aPage) {
-
         myMainView.hideFooterProgress();
         myMainView.showInitialProgress();
         Call<News> aCall = myWebservice.getNews(aSearchText, aPage);
         setCurrentPage(aPage);
         if (aCall != null)
             aCall.enqueue(this);
-
     }
 
     @Override
